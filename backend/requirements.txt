@@ -1,0 +1,9 @@
+fastapi==0.115.12
+uvicorn==0.34.3
+liboqs-python==0.16.0
+scikit-learn==1.6.1
+qiskit==1.4.2
+qiskit-machine-learning==0.8.2
+numpy==2.2.5
+joblib==1.5.1
+python-multipart==0.0.20
