@@ -1,0 +1,18 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SignatureLog {
+  id               String   @id @default(uuid())
+  userId           String
+  documentHash     String
+  threatScore      Float
+  signatureStatus  String
+  timestamp        DateTime @default(now())
+  blockchainTxHash String?
+}
