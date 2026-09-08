@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import prisma from '@/lib/prisma';
 import { ethers } from 'ethers';
 
@@ -44,13 +45,27 @@ export async function POST(req: NextRequest) {
       rateLimitMap.set(ip_address, { count: 1, timestamp: now });
     }
 
-    const data = await req.json();
-    
-    // Fallbacks for data to handle testing via attack simulator
-    const payload_size = data.payload_size || 5000; 
-    const time_since_last_req = data.time_since_last_req || 1.0;
-    const documentHash = data.document_hash || 'mock_hash_' + Date.now();
-    const userId = data.userId || 'system_user';
+    let payload_size, time_since_last_req, realDocumentHash, userId;
+
+    // Parse real file uploads as FormData, fallback to JSON for attack_simulator.py
+    if (req.headers.get('content-type')?.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const file = formData.get('file') as File;
+      payload_size = Number(formData.get('payload_size')) || 5000;
+      time_since_last_req = Number(formData.get('time_since_last_req')) || 1.0;
+      userId = formData.get('userId') as string || 'system_user';
+
+      if (!file) throw new Error('No file provided in the request');
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      realDocumentHash = '0x' + crypto.createHash('sha256').update(buffer).digest('hex');
+    } else {
+      const data = await req.json();
+      payload_size = data.payload_size || 5000; 
+      time_since_last_req = data.time_since_last_req || 1.0;
+      realDocumentHash = data.document_hash || 'mock_hash_' + Date.now();
+      userId = data.userId || 'system_user';
+    }
 
     // 1. Send data to Python FastAPI for Threat Prediction
     const threatRes = await fetch('http://localhost:8000/api/predict-threat', {
@@ -72,7 +87,7 @@ export async function POST(req: NextRequest) {
     // 2. If threat score is acceptable, proceed to digital signature
     if (threatScore <= 0.8) {
       const signFormData = new FormData();
-      signFormData.append('document_hash', documentHash);
+      signFormData.append('document_hash', realDocumentHash);
 
       const signRes = await fetch('http://localhost:8000/api/sign-document', {
         method: 'POST',
@@ -99,7 +114,7 @@ export async function POST(req: NextRequest) {
           const abi = ["function recordSignature(string memory _docHash, string memory _threatScore) external"];
           const contract = new ethers.Contract(contractAddress, abi, wallet);
           
-          const tx = await contract.recordSignature(documentHash, threatScore.toString());
+          const tx = await contract.recordSignature(realDocumentHash, threatScore.toString());
           blockchainTxHash = tx.hash; // Real on-chain transaction hash
         } else {
           console.warn("Blockchain environment variables missing. Falling back to mock tx hash.");
@@ -113,7 +128,7 @@ export async function POST(req: NextRequest) {
     const log = await withRetry(() => prisma.signatureLog.create({
       data: {
         userId,
-        documentHash,
+        documentHash: realDocumentHash,
         threatScore,
         signatureStatus,
         blockchainTxHash

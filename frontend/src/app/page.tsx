@@ -35,14 +35,14 @@ export default function Home() {
     setStatus("qsvm");
     
     try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("payload_size", selectedFile.size.toString());
+      formData.append("time_since_last_req", "1.5");
+
       const res = await fetch("/api/process-signature", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          payload_size: selectedFile.size,
-          time_since_last_req: 1.5,
-          document_hash: "hash_" + selectedFile.name.replace(/[^a-zA-Z0-9]/g, '_')
-        })
+        body: formData
       });
       
       const data = await res.json();
