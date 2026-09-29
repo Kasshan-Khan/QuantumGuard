@@ -39,6 +39,66 @@ except Exception as e:
 
 app = FastAPI(title="Quantum-Inspired Cyber Threat Detection API")
 
+
+class VerifyRequest(BaseModel):
+    document_hash: str  # hex string, with or without 0x prefix
+    signature: str       # hex-encoded ML-DSA-65 signature
+    public_key: str      # hex-encoded ML-DSA-65 public key
+
+
+@app.post("/api/verify-signature")
+async def verify_signature_endpoint(request: VerifyRequest):
+    """
+    Verify an ML-DSA-65 (CRYSTALS-Dilithium) digital signature.
+    Runs: oqs.Signature('ML-DSA-65').verify(doc_hash_bytes, signature_bytes, public_key_bytes)
+    """
+    if not OQS_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="liboqs is not available on this server. Cannot perform real verification."
+        )
+
+    try:
+        # IMPORTANT: sign() encodes the hash string as UTF-8 bytes:
+        #   signer_instance.sign(document_hash.encode('utf-8'))
+        # So verify() MUST use the same encoding — NOT bytes.fromhex() which
+        # produces completely different bytes and causes every valid sig to fail.
+        doc_hash_bytes   = request.document_hash.encode('utf-8')
+        signature_bytes  = bytes.fromhex(request.signature)
+        public_key_bytes = bytes.fromhex(request.public_key)
+
+        # Real ML-DSA-65 verification
+        verifier = oqs.Signature('ML-DSA-65')
+        is_valid = verifier.verify(doc_hash_bytes, signature_bytes, public_key_bytes)
+
+
+        return {
+            "valid": bool(is_valid),
+            "algorithm": "ML-DSA-65",
+            "document_hash": request.document_hash,
+            "status": "SIGNATURE_VALID" if is_valid else "SIGNATURE_INVALID",
+            "mode": "liboqs"
+        }
+    except ValueError as e:
+        # Bad hex encoding, wrong key size, etc.
+        return {
+            "valid": False,
+            "algorithm": "ML-DSA-65",
+            "document_hash": request.document_hash,
+            "status": "VERIFICATION_ERROR",
+            "error": f"Invalid input: {e}",
+            "mode": "liboqs"
+        }
+    except Exception as e:
+        return {
+            "valid": False,
+            "algorithm": "ML-DSA-65",
+            "document_hash": request.document_hash,
+            "status": "VERIFICATION_ERROR",
+            "error": str(e),
+            "mode": "liboqs"
+        }
+
 class ThreatRequest(BaseModel):
     ip_address: str
     payload_size: int = Field(..., ge=0, le=100_000_000)

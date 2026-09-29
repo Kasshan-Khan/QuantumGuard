@@ -10,11 +10,26 @@ const STEPS = [
 ];
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<"sign" | "verify">("sign");
+
+  // ── Sign tab state ──
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "qsvm" | "mldsa" | "success" | "rejected">("idle");
   const [threatScore, setThreatScore] = useState<number | null>(null);
   const [signatureHash, setSignatureHash] = useState<string | null>(null);
+  const [documentHash, setDocumentHash] = useState<string | null>(null);
+  const [digitalSignature, setDigitalSignature] = useState<string | null>(null);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [verificationMetadata, setVerificationMetadata] = useState<object | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Verify tab state ──
+  const [verifyOrigFile, setVerifyOrigFile] = useState<File | null>(null);
+  const [verifyProofFile, setVerifyProofFile] = useState<File | null>(null);
+  const [verifyResult, setVerifyResult] = useState<any | null>(null);
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const verifyOrigRef  = useRef<HTMLInputElement>(null);
+  const verifyProofRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
   const handleDrop = (e: React.DragEvent) => {
@@ -30,6 +45,10 @@ export default function Home() {
     setStatus("uploading");
     setThreatScore(null);
     setSignatureHash(null);
+    setDocumentHash(null);
+    setDigitalSignature(null);
+    setPublicKey(null);
+    setVerificationMetadata(null);
     
     await new Promise(resolve => setTimeout(resolve, 600));
     setStatus("qsvm");
@@ -48,15 +67,21 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Failed');
 
-      setThreatScore(data.threatScore);
+      // API returns snake_case fields
+      const score: number = data.threat_score;
+      setThreatScore(score);
+      setDocumentHash(data.document_hash ?? null);
+      setDigitalSignature(data.digital_signature ?? null);
+      setPublicKey(data.public_key ?? null);
+      setVerificationMetadata(data.verification_metadata ?? null);
 
-      if (data.threatScore > 0.8) {
+      if (score > 0.8) {
         setStatus("rejected");
       } else {
         await new Promise(resolve => setTimeout(resolve, 400));
         setStatus("mldsa");
         await new Promise(resolve => setTimeout(resolve, 800));
-        setSignatureHash(data.log?.blockchainTxHash || "0x" + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''));
+        setSignatureHash(data.blockchain_tx_hash ?? null);
         setStatus("success");
       }
     } catch (error) {
@@ -65,18 +90,38 @@ export default function Home() {
     }
   };
 
+  // ── Verify handler ──
+  const handleVerify = async () => {
+    if (!verifyOrigFile || !verifyProofFile) return;
+    setVerifyLoading(true);
+    setVerifyResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file",  verifyOrigFile);
+      fd.append("proof", verifyProofFile);
+      const res  = await fetch("/api/verify", { method: "POST", body: fd });
+      const data = await res.json();
+      setVerifyResult(data);
+    } catch (e: any) {
+      setVerifyResult({ success: false, error: e.message });
+    } finally {
+      setVerifyLoading(false);
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-black text-[#E0E0E0] font-mono flex flex-col p-4 md:p-8 relative">
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 h-full max-w-[1600px] mx-auto w-full">
-        
-        {/* Left: Command Console & Upload */}
+
+        {/* Left panel */}
         <div className="flex flex-col space-y-8">
+          {/* Header */}
           <div className="border border-[#333] bg-[#0a0a0a] p-6 relative">
             <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-white"></div>
             <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-white"></div>
             <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-white"></div>
             <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-white"></div>
-            
             <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter text-white mb-2">
               Aegis_Command<span className="text-[#00FF41] animate-pulse">_</span>
             </h1>
@@ -85,30 +130,145 @@ export default function Home() {
             </p>
           </div>
 
-          <div 
-            className={`flex-1 border-2 border-dashed ${status === 'idle' ? 'border-[#444] hover:border-[#00FF41] cursor-pointer' : 'border-[#222]'} bg-[#050505] relative flex flex-col items-center justify-center p-8 min-h-[400px] transition-colors`}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={() => status === "idle" && fileInputRef.current?.click()}
-          >
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" disabled={status !== "idle"} />
-            
-            {!file ? (
-              <div className="text-center space-y-4">
-                <div className="text-[#00FF41] font-bold text-xl">[ DROP ZONE ]</div>
-                <div className="text-[#666] text-sm">TARGET_DATA {`=>`} /dev/null OR CLICK TO BROWSE</div>
-              </div>
-            ) : (
-              <div className="w-full max-w-md border border-[#333] bg-black p-4">
-                <div className="text-xs text-[#888] mb-4 pb-2 border-b border-[#333]">FILE_METADATA_EXTRACTED</div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-[#666]">FILE_NAME</span><span className="text-white truncate ml-4">{file.name}</span></div>
-                  <div className="flex justify-between"><span className="text-[#666]">BYTE_SIZE</span><span className="text-white">{file.size} B</span></div>
-                  <div className="flex justify-between"><span className="text-[#666]">STATUS</span><span className={status === 'rejected' ? 'text-red-500 font-bold' : status === 'success' ? 'text-[#00FF41] font-bold' : 'text-yellow-500'}>{status.toUpperCase()}</span></div>
-                </div>
-              </div>
-            )}
+          {/* Tab Toggle */}
+          <div className="flex border border-[#333]">
+            <button
+              onClick={() => setActiveTab("sign")}
+              className={`flex-1 py-3 text-sm font-bold transition-colors ${
+                activeTab === "sign"
+                  ? "bg-[#00FF41] text-black"
+                  : "bg-black text-[#666] hover:text-white"
+              }`}
+            >
+              [ SIGN_DOCUMENT ]
+            </button>
+            <button
+              onClick={() => setActiveTab("verify")}
+              className={`flex-1 py-3 text-sm font-bold transition-colors ${
+                activeTab === "verify"
+                  ? "bg-[#00FF41] text-black"
+                  : "bg-black text-[#666] hover:text-white"
+              }`}
+            >
+              [ VERIFY_SIGNATURE ]
+            </button>
           </div>
+
+          {/* SIGN TAB */}
+          {activeTab === "sign" && (
+            <div
+              className={`flex-1 border-2 border-dashed ${status === 'idle' ? 'border-[#444] hover:border-[#00FF41] cursor-pointer' : 'border-[#222]'} bg-[#050505] relative flex flex-col items-center justify-center p-8 min-h-[400px] transition-colors`}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => status === "idle" && fileInputRef.current?.click()}
+            >
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" disabled={status !== "idle"} />
+              {!file ? (
+                <div className="text-center space-y-4">
+                  <div className="text-[#00FF41] font-bold text-xl">[ DROP ZONE ]</div>
+                  <div className="text-[#666] text-sm">TARGET_DATA {`=>`} /dev/null OR CLICK TO BROWSE</div>
+                </div>
+              ) : (
+                <div className="w-full max-w-md border border-[#333] bg-black p-4">
+                  <div className="text-xs text-[#888] mb-4 pb-2 border-b border-[#333]">FILE_METADATA_EXTRACTED</div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-[#666]">FILE_NAME</span><span className="text-white truncate ml-4">{file.name}</span></div>
+                    <div className="flex justify-between"><span className="text-[#666]">BYTE_SIZE</span><span className="text-white">{file.size} B</span></div>
+                    <div className="flex justify-between"><span className="text-[#666]">STATUS</span><span className={status === 'rejected' ? 'text-red-500 font-bold' : status === 'success' ? 'text-[#00FF41] font-bold' : 'text-yellow-500'}>{status.toUpperCase()}</span></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VERIFY TAB */}
+          {activeTab === "verify" && (
+            <div className="flex-1 bg-[#050505] border border-[#333] p-8 space-y-6">
+              <div className="text-xs text-[#666] border-b border-[#333] pb-3">VERIFICATION_MODE // Upload original file + .quantumguard.json proof</div>
+
+              {/* Upload original file */}
+              <div>
+                <div className="text-xs text-[#888] mb-2">STEP_1 // SELECT_ORIGINAL_FILE</div>
+                <button
+                  onClick={() => verifyOrigRef.current?.click()}
+                  className="w-full border border-dashed border-[#444] hover:border-[#00FF41] text-[#666] hover:text-[#00FF41] py-4 text-sm transition-colors"
+                >
+                  {verifyOrigFile ? `[ ${verifyOrigFile.name} ]` : "[ CLICK TO SELECT ORIGINAL FILE ]"}
+                </button>
+                <input type="file" ref={verifyOrigRef} className="hidden" onChange={e => e.target.files && setVerifyOrigFile(e.target.files[0])} />
+              </div>
+
+              {/* Upload proof file */}
+              <div>
+                <div className="text-xs text-[#888] mb-2">STEP_2 // SELECT_PROOF_FILE (.quantumguard.json)</div>
+                <button
+                  onClick={() => verifyProofRef.current?.click()}
+                  className="w-full border border-dashed border-[#444] hover:border-yellow-500 text-[#666] hover:text-yellow-500 py-4 text-sm transition-colors"
+                >
+                  {verifyProofFile ? `[ ${verifyProofFile.name} ]` : "[ CLICK TO SELECT .quantumguard.json ]"}
+                </button>
+                <input type="file" ref={verifyProofRef} className="hidden" accept=".json" onChange={e => e.target.files && setVerifyProofFile(e.target.files[0])} />
+              </div>
+
+              {/* Run verification */}
+              <button
+                onClick={handleVerify}
+                disabled={!verifyOrigFile || !verifyProofFile || verifyLoading}
+                className="w-full border border-[#00FF41] text-[#00FF41] py-3 font-bold text-sm hover:bg-[#00FF41] hover:text-black transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {verifyLoading ? "[ VERIFYING... ]" : "[ RUN_VERIFICATION ]"}
+              </button>
+
+              {/* Verification result */}
+              {verifyResult && (
+                <div className={`border p-4 space-y-3 ${
+                  verifyResult.verdict === "AUTHENTIC" ? "border-[#00FF41] bg-[#00FF41]/5" :
+                  verifyResult.verdict === "TAMPERED"  ? "border-red-500 bg-red-500/5" :
+                  "border-yellow-500 bg-yellow-500/5"
+                }`}>
+                  <div className={`text-lg font-bold ${
+                    verifyResult.verdict === "AUTHENTIC" ? "text-[#00FF41]" :
+                    verifyResult.verdict === "TAMPERED"  ? "text-red-500" :
+                    "text-yellow-500"
+                  }`}>
+                    {verifyResult.verdict === "AUTHENTIC"         ? "✓ AUTHENTIC" :
+                     verifyResult.verdict === "TAMPERED"          ? "✗ TAMPERED" :
+                     verifyResult.verdict === "INVALID_SIGNATURE" ? "✗ INVALID SIGNATURE" :
+                     "⚠ UNVERIFIED"}
+                  </div>
+                  <div className="text-xs text-[#aaa]">{verifyResult.verdict_message}</div>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-[#666]">HASH_MATCH</span>
+                      <span className={verifyResult.hash_match ? "text-[#00FF41]" : "text-red-500"}>
+                        {verifyResult.hash_match ? "PASS" : "FAIL"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#666]">ML_DSA_VERIFY</span>
+                      <span className={verifyResult.signature_valid ? "text-[#00FF41]" : "text-red-500"}>
+                        {verifyResult.signature_valid ? "PASS" : verifyResult.backend_status}
+                      </span>
+                    </div>
+                    {verifyResult.signed_at && (
+                      <div className="flex justify-between">
+                        <span className="text-[#666]">SIGNED_AT</span>
+                        <span className="text-white">{new Date(verifyResult.signed_at).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {verifyResult.blockchain?.tx_hash && (
+                      <div className="pt-1">
+                        <div className="text-[#666] mb-1">BLOCKCHAIN_TX</div>
+                        <div className="text-[#00FF41] font-mono break-all text-xs bg-black p-2 border border-[#333]">
+                          {verifyResult.blockchain.tx_hash}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right: Telemetry Sidebar */}
@@ -156,13 +316,57 @@ export default function Home() {
             })}
           </div>
 
-          {/* TX Hash Result */}
-          {status === 'success' && signatureHash && (
-            <div className="border-t border-[#333] p-4 bg-[#0a0a0a]">
-              <div className="text-xs text-[#666] mb-2">TX_HASH_GENERATED</div>
-              <div className="text-xs font-mono text-[#00FF41] break-all bg-black p-3 border border-[#333]">
-                {signatureHash.length > 100 ? signatureHash.substring(0, 100) + "..." : signatureHash}
-              </div>
+          {/* Cryptographic Proof Panel */}
+          {status === 'success' && (
+            <div className="border-t border-[#333] p-4 bg-[#0a0a0a] space-y-3">
+              {documentHash && (
+                <div>
+                  <div className="text-xs text-[#666] mb-1">DOC_HASH_SHA256</div>
+                  <div className="text-xs font-mono text-[#00FF41] break-all bg-black p-2 border border-[#333]">
+                    {documentHash}
+                  </div>
+                </div>
+              )}
+              {signatureHash && (
+                <div>
+                  <div className="text-xs text-[#666] mb-1">BLOCKCHAIN_TX_HASH</div>
+                  <div className="text-xs font-mono text-[#00FF41] break-all bg-black p-2 border border-[#333]">
+                    {signatureHash.length > 80 ? signatureHash.substring(0, 80) + '...' : signatureHash}
+                  </div>
+                </div>
+              )}
+              {publicKey && (
+                <div>
+                  <div className="text-xs text-[#666] mb-1">ML_DSA_PUBLIC_KEY (truncated)</div>
+                  <div className="text-xs font-mono text-[#00FF41] break-all bg-black p-2 border border-[#333]">
+                    {publicKey.substring(0, 64)}...
+                  </div>
+                </div>
+              )}
+              {digitalSignature && (
+                <div>
+                  <div className="text-xs text-[#666] mb-1">ML_DSA_SIGNATURE (truncated)</div>
+                  <div className="text-xs font-mono text-yellow-500 break-all bg-black p-2 border border-[#333]">
+                    {digitalSignature.substring(0, 64)}...
+                  </div>
+                </div>
+              )}
+              {verificationMetadata && (
+                <button
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(verificationMetadata, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${file?.name ?? 'document'}.quantumguard.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="w-full mt-2 border border-[#00FF41] text-[#00FF41] text-xs py-2 px-3 hover:bg-[#00FF41] hover:text-black transition-colors font-bold"
+                >
+                  [ DOWNLOAD_PROOF.json ]
+                </button>
+              )}
             </div>
           )}
         </div>

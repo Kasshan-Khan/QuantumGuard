@@ -15,4 +15,6 @@ model SignatureLog {
   signatureStatus  String
   timestamp        DateTime @default(now())
   blockchainTxHash String?
+  digitalSignature String?  // hex-encoded ML-DSA-65 signature
+  publicKey        String?  // hex-encoded ML-DSA-65 public key (server singleton)
 }
