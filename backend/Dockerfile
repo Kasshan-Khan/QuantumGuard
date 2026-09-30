@@ -19,12 +19,13 @@ RUN apt-get update && apt-get install -y \
 RUN git clone -b main https://github.com/open-quantum-safe/liboqs.git /opt/liboqs && \
     cd /opt/liboqs && \
     mkdir build && cd build && \
-    cmake -GNinja -DOQS_USE_OPENSSL=ON -DOQS_ENABLE_KEM_ALL=OFF -DOQS_ENABLE_SIG_ALL=OFF -DOQS_ENABLE_SIG_ML_DSA=ON -DBUILD_SHARED_LIBS=ON .. && \
-    ninja && ninja install && \
+    cmake -GNinja -DOQS_USE_OPENSSL=ON -DBUILD_SHARED_LIBS=ON .. && \
+    ninja -j 1 && ninja install && \
     echo "/usr/local/lib" > /etc/ld.so.conf.d/liboqs.conf && ldconfig
 
 # Tell liboqs-python where to find the manually compiled shared library
 ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ENV LIBOQS_DIR=/usr/local
 
 # Copy the requirements file into the container
 COPY requirements.txt .
