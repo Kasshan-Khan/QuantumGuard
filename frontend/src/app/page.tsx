@@ -181,6 +181,25 @@ export default function Home() {
                     <div className="flex justify-between"><span className="text-[#666]">BYTE_SIZE</span><span className="text-white">{file.size} B</span></div>
                     <div className="flex justify-between"><span className="text-[#666]">STATUS</span><span className={status === 'rejected' ? 'text-red-500 font-bold' : status === 'success' ? 'text-[#00FF41] font-bold' : 'text-yellow-500'}>{status.toUpperCase()}</span></div>
                   </div>
+                  {(status === 'success' || status === 'rejected') && (
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setFile(null); 
+                        setStatus("idle"); 
+                        setThreatScore(null);
+                        setSignatureHash(null);
+                        setDocumentHash(null);
+                        setDigitalSignature(null);
+                        setPublicKey(null);
+                        setVerificationMetadata(null);
+                        setCertifiedPdfBase64(null);
+                      }}
+                      className="mt-6 w-full border border-[#444] text-[#888] hover:border-[#00FF41] hover:text-[#00FF41] py-2 text-xs font-bold transition-colors"
+                    >
+                      [ SIGN ANOTHER FILE ]
+                    </button>
+                  )}
                 </div>
               )}
             </div>
