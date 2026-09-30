@@ -24,7 +24,7 @@ RUN git clone -b main https://github.com/open-quantum-safe/liboqs.git /opt/liboq
     echo "/usr/local/lib" > /etc/ld.so.conf.d/liboqs.conf && ldconfig
 
 # Tell liboqs-python where to find the manually compiled shared library
-ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/lib
 ENV LIBOQS_DIR=/usr/local
 
 # Copy the requirements file into the container
