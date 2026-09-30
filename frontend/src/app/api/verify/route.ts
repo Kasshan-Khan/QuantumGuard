@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { PDFDocument, PDFName, PDFDict, PDFArray, PDFString, PDFHexString, PDFRawStream } from 'pdf-lib';
 
-async function extractProofFromPdf(pdfBytes) {
-  const debug = [];
+async function extractProofFromPdf(pdfBytes: any) {
+  const debug: string[] = [];
   try {
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     const context = pdfDoc.context;
@@ -52,7 +52,7 @@ async function extractProofFromPdf(pdfBytes) {
 
       const streamRef = efEntry.get(PDFName.of('F'));
       if (!streamRef) { debug.push("No F stream in EF"); continue; }
-      const stream = context.lookup(streamRef, PDFRawStream);
+      const stream = context.lookup(streamRef) as any;
       if (!stream) { debug.push("F is not a raw stream"); continue; }
 
       const { decodePDFRawStream } = await import('pdf-lib');
@@ -61,17 +61,17 @@ async function extractProofFromPdf(pdfBytes) {
       return { proof: JSON.parse(jsonText), debug: [...debug, "Success"] };
     }
     return { proof: null, debug: [...debug, "Iterated all names, did not find proof"] };
-  } catch (err) {
+  } catch (err: any) {
     console.error('PDF proof extraction error:', err);
     return { proof: null, debug: [...debug, `Exception: ${err.message}`] };
   }
 }
 
-export async function POST(req) {
+export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const originalFile = formData.get('file');
-    const proofFile    = formData.get('proof');
+    const originalFile = formData.get('file') as File;
+    const proofFile    = formData.get('proof') as File;
 
     if (!originalFile) return NextResponse.json({ success: false, error: 'No file provided.' }, { status: 400 });
 
@@ -81,7 +81,7 @@ export async function POST(req) {
 
     let proof = null;
     let proofSource = 'none';
-    let pdfDebugLogs = [];
+    let pdfDebugLogs: string[] = [];
 
     if (isPdf) {
       const result = await extractProofFromPdf(fileBuffer);
@@ -192,7 +192,7 @@ export async function POST(req) {
       blockchain: proof.blockchain || null,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Verification error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

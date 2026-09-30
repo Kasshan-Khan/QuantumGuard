@@ -8,10 +8,10 @@ const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 5;
 
-const withRetry = async (fn, retries = 3, delayMs = 1500) => {
+const withRetry = async (fn: () => Promise<any>, retries = 3, delayMs = 1500) => {
   for (let i = 0; i < retries; i++) {
     try { return await fn(); }
-    catch (e) {
+    catch (e: any) {
       if (i === retries - 1) throw e;
       if (e.code === 'P1001' || e.message?.includes("Can't reach database server")) {
         console.warn('DB cold-start, retrying attempt ' + (i + 1));
@@ -22,7 +22,7 @@ const withRetry = async (fn, retries = 3, delayMs = 1500) => {
   throw new Error('Unreachable');
 };
 
-export async function POST(req) {
+export async function POST(req: NextRequest) {
   try {
     const ip_address = req.headers.get('x-forwarded-for') || '127.0.0.1';
 
@@ -43,7 +43,7 @@ export async function POST(req) {
 
     if (req.headers.get('content-type')?.includes('multipart/form-data')) {
       const formData = await req.formData();
-      const file = formData.get('file');
+      const file = formData.get('file') as File;
       payload_size        = Number(formData.get('payload_size'))        || 5000;
       time_since_last_req = Number(formData.get('time_since_last_req')) || 1.0;
       userId = formData.get('userId') || 'system_user';
@@ -180,7 +180,7 @@ export async function POST(req) {
       is_pdf:                isPdf,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error processing signature:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
