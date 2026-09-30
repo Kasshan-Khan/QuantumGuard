@@ -39,6 +39,15 @@ except Exception as e:
 
 app = FastAPI(title="Quantum-Inspired Cyber Threat Detection API")
 
+@app.get("/health")
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "service": "quantumguard-backend",
+        "crypto": "liboqs" if OQS_AVAILABLE else "mock",
+        "ml": "qsvc" if (qsvc_model and scaler) else "mock"
+    }
 
 class VerifyRequest(BaseModel):
     document_hash: str  # hex string, with or without 0x prefix

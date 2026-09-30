@@ -153,7 +153,8 @@ export async function POST(req) {
     let backendError   = null;
 
     try {
-      const verifyRes  = await fetch('http://localhost:8000/api/verify-signature', {
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+      const verifyRes  = await fetch(`${backendUrl}/api/verify-signature`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ document_hash: proofHash, signature: digitalSig, public_key: publicKey }),

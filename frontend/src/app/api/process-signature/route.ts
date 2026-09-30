@@ -60,7 +60,8 @@ export async function POST(req) {
       userId = data.userId || 'system_user';
     }
 
-    const threatRes = await fetch('http://localhost:8000/api/predict-threat', {
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
+    const threatRes = await fetch(`${backendUrl}/api/predict-threat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ip_address, payload_size, time_since_last_req }),
@@ -77,7 +78,7 @@ export async function POST(req) {
     if (threatScore <= 0.8) {
       const signFormData = new FormData();
       signFormData.append('document_hash', documentHash);
-      const signRes = await fetch('http://localhost:8000/api/sign-document', { method: 'POST', body: signFormData });
+      const signRes = await fetch(`${backendUrl}/api/sign-document`, { method: 'POST', body: signFormData });
       if (!signRes.ok) throw new Error('Digital signature service unavailable');
       const signData   = await signRes.json();
       digitalSignature = signData.signature;
